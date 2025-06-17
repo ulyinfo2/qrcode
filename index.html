@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QR Code Decryptor</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; }
+input, button, textarea { width: 100%; margin-top: 10px; padding: 10px; }
+#output { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h2>🔐 QR Code Decryptor (AES-256-CBC)</h2>
+
+<label for="base64">Paste Base64 Text from QR Code:</label>
+<textarea id="base64" rows="8" placeholder="Paste base64-encoded encrypted message from QR code..."></textarea>
+
+<label for="password">Enter Password:</label>
+<input type="password" id="password" placeholder="Enter the password you used to encrypt">
+
+<button onclick="decrypt()">🔓 Decrypt</button>
+
+<div id="output"></div>
+
+<script src="<https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>>
+<script>
+function decrypt() {
+const b64 = document.getElementById("base64").value.trim();
+const password = document.getElementById("password").value;
+
+if (!b64 || !password) {
+document.getElementById("output").innerText = "❗ Please enter both base64 and password.";
+return;
+}
+
+try {
+// Decode base64 to hex string
+const encryptedWords = CryptoJS.enc.Base64.parse(b64);
+
+```
+// Extract OpenSSL salt header if it exists
+const encryptedHex = encryptedWords.toString(CryptoJS.enc.Hex);
+const saltedHeader = encryptedHex.slice(0, 16);
+let salt, ciphertext;
+
+if (saltedHeader === "53616c7465645f5f") {  // "Salted__" in hex
+  salt = CryptoJS.enc.Hex.parse(encryptedHex.slice(16, 32));
+  ciphertext = CryptoJS.enc.Hex.parse(encryptedHex.slice(32));
+} else {
+  document.getElementById("output").innerText = "❌ Invalid or unsupported encrypted format.";
+  return;
+}
+
+// Derive key and IV using OpenSSL-compatible method
+const keySize = 32;
+const ivSize = 16;
+const iterations = 100000;
+
+const keyAndIV = CryptoJS.PBKDF2(password, salt, {
+  keySize: (keySize + ivSize) / 4,
+  iterations: iterations,
+  hasher: CryptoJS.algo.SHA256
+});
+
+const key = CryptoJS.lib.WordArray.create(keyAndIV.words.slice(0, keySize / 4));
+const iv  = CryptoJS.lib.WordArray.create(keyAndIV.words.slice(keySize / 4));
+
+// Decrypt
+const decrypted = CryptoJS.AES.decrypt(
+  { ciphertext: ciphertext },
+  key,
+  { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+);
+
+const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+
+if (plaintext) {
+  document.getElementById("output").innerText = "✅ Decrypted Message:\n\n" + plaintext;
+} else {
+  document.getElementById("output").innerText = "❌ Decryption failed. Wrong password?";
+}
+```
+
+} catch (e) {
+document.getElementById("output").innerText = "❌ Error: " + e.message;
+}
+}
+</script>
+
+</body>
+</html>
