@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Decryptor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f7f9fa;
+      max-width: 600px;
+      margin: auto;
+    }
+    textarea, input, button {
+      width: 100%;
+      margin: 10px 0;
+      padding: 10px;
+      font-size: 16px;
+    }
+    #output {
+      background-color: #eee;
+      padding: 15px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      border-left: 4px solid #007bff;
+    }
+  </style>
+
+  <!-- ✅ Load CryptoJS BEFORE any script uses it -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"
+    integrity="sha512-GhFV/98H9Af8PLjlTStM7zCQDbLtXj2q7Uv8oC7A4EqV7RfBd7wDJUE7J2H+lqWCPGaq+GGxS+W/m1HCP2esTg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+  <h2>🔐 Password-Protected QR Decryptor</h2>
+
+  <label for="base64">📋 Base64 from QR:</label>
+  <textarea id="base64" rows="8" placeholder="Paste the base64 string here..."></textarea>
+
+  <label for="password">🔑 Password:</label>
+  <input type="password" id="password" placeholder="Enter the password">
+
+  <button onclick="decrypt()">🔓 Decrypt</button>
+
+  <div id="output"></div>
+
+  <!-- ✅ JS must come AFTER CryptoJS is loaded -->
+  <script>
+    function decrypt() {
+      const b64 = document.getElementById("base64").value.trim();
+      const password = document.getElementById("password").value;
+      const output = document.getElementById("output");
+
+      if (!b64 || !password) {
+        output.innerText = "❗ Please provide both base64 text and password.";
+        return;
+      }
+
+      try {
+        const encryptedWords = CryptoJS.enc.Base64.parse(b64);
+        const encryptedHex = encryptedWords.toString(CryptoJS.enc.Hex);
+        const saltedHeader = encryptedHex.slice(0, 16);
+
+        let salt, ciphertext;
+
+        if (saltedHeader === "53616c7465645f5f") {  // "Salted__" in hex
+          salt = CryptoJS.enc.Hex.parse(encryptedHex.slice(16, 32));
+          ciphertext = CryptoJS.enc.Hex.parse(encryptedHex.slice(32));
+        } else {
+          output.innerText = "❌ Encrypted data does not start with 'Salted__'.";
+          return;
+        }
+
+        const keySize = 32;
+        const ivSize = 16;
+        const iterations = 100000;
+
+        const keyAndIV = CryptoJS.PBKDF2(password, salt, {
+          keySize: (keySize + ivSize) / 4,
+          iterations: iterations,
+          hasher: CryptoJS.algo.SHA256
+        });
+
+        const key = CryptoJS.lib.WordArray.create(keyAndIV.words.slice(0, keySize / 4));
+        const iv = CryptoJS.lib.WordArray.create(keyAndIV.words.slice(keySize / 4));
+
+        const decrypted = CryptoJS.AES.decrypt(
+          { ciphertext: ciphertext },
+          key,
+          { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+        );
+
+        const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+
+        output.innerText = plaintext
+          ? "✅ Decrypted Message:\n\n" + plaintext
+          : "❌ Decryption failed — possibly incorrect password.";
+      } catch (e) {
+        output.innerText = "❌ Error: " + e.message;
+      }
+    }
+  </script>
+</body>
+</html>
